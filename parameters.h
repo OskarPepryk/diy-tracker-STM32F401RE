@@ -13,9 +13,12 @@
 #endif
 
 #ifdef WITH_STM32
+#ifndef WITH_NUCLEO
 #include "stm32f10x_flash.h"
-#include "flashsize.h"
 #endif
+#endif
+
+#include "flashsize.h"
 
 #include "nmea.h"
 #include "format.h"
@@ -176,6 +179,7 @@ class FlashParameters
 #endif // WITH_ESP32
 
 #ifdef WITH_STM32
+#ifndef WITH_NUCLEO
   uint32_t static CheckSum(const uint32_t *Word, uint32_t Words)                      // calculate check-sum of pointed data
   { uint32_t Check=CheckInit;
     for(uint32_t Idx=0; Idx<Words; Idx++)
@@ -220,6 +224,7 @@ class FlashParameters
     FLASH_Lock();                                                                      // re-lock Flash
     if(CheckSum(Addr, Words)!=Addr[Words]) return -1;                                  // verify check-sum in Flash
     return 0; }
+#endif // WITH_NUCLEO
 #endif // WITH_STM32
 
   uint8_t Print(char *Line)       // print parameters on a single line, suitable for console output

@@ -37,6 +37,7 @@ void UART_ConfigNVIC(uint8_t IRQ, uint8_t Priority, uint8_t SubPriority)
   NVIC_Init(&NVIC_InitStructure);
 }
 
+#ifndef WITH_NUCLEO
 void UART_ConfigGPIO(GPIO_TypeDef* GPIO, uint16_t InpPin, uint16_t OutPin)
 {
   GPIO_InitTypeDef  GPIO_InitStructure;
@@ -50,6 +51,32 @@ void UART_ConfigGPIO(GPIO_TypeDef* GPIO, uint16_t InpPin, uint16_t OutPin)
   GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF_PP;
   GPIO_Init(GPIO, &GPIO_InitStructure);
 }
+#else
+void UART_ConfigGPIO(GPIO_TypeDef* GPIO, uint16_t InpPin, uint16_t OutPin)
+{
+  GPIO_InitTypeDef  GPIO_InitStructure;
+
+  GPIO_InitStructure.GPIO_Pin   = InpPin;         // Configure USART Rx (input) pin as input floating
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_NOPULL;
+  GPIO_Init(GPIO, &GPIO_InitStructure);
+
+
+  GPIO_InitStructure.GPIO_Pin   = OutPin;          // Configure USART Tx (output) pin as alternate function push-pull
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_Init(GPIO, &GPIO_InitStructure);
+}
+
+void UART_ConfigAF(GPIO_TypeDef* GPIOx, uint16_t GPIO_PinSourceRx, uint16_t GPIO_PinSourceTx, uint8_t GPIO_AF)
+{
+	//TODO Map pin mask to pinSource and change input parameters to match other functions
+	  GPIO_PinAFConfig(GPIOx, GPIO_PinSourceRx, GPIO_AF);
+	  GPIO_PinAFConfig(GPIOx, GPIO_PinSourceTx, GPIO_AF);
+}
+#endif
 
 void UART_ConfigUSART(USART_TypeDef* USART, int BaudRate)
 {

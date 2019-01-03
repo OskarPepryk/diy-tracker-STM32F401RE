@@ -230,15 +230,15 @@ static void GPS_BurstComplete(void)                                        // wh
   }
 #endif
 #ifdef DEBUG_PRINT
-  Position[PosIdx].PrintLine(Line);
-  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
-  Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
-  CONS_UART_Write('.');
-  Format_UnsDec(CONS_UART_Write, TimeSync_msTime(),3);
-  Format_String(CONS_UART_Write, " -> GPS_BurstComplete()\nGPS");
-  CONS_UART_Write('0'+PosIdx); CONS_UART_Write(':'); CONS_UART_Write(' ');
-  Format_String(CONS_UART_Write, Line);
-  xSemaphoreGive(CONS_Mutex);
+//  Position[PosIdx].PrintLine(Line);		//Crashes MCU
+//  xSemaphoreTake(CONS_Mutex, portMAX_DELAY);
+//  Format_UnsDec(CONS_UART_Write, TimeSync_Time()%60, 2);
+//  CONS_UART_Write('.');
+//  Format_UnsDec(CONS_UART_Write, TimeSync_msTime(),3);
+//  Format_String(CONS_UART_Write, " -> GPS_BurstComplete()\nGPS");
+//  CONS_UART_Write('0'+PosIdx); CONS_UART_Write(':'); CONS_UART_Write(' ');
+//  Format_String(CONS_UART_Write, Line);
+//  xSemaphoreGive(CONS_Mutex);
 #endif
   if(Position[PosIdx].hasGPS)                                              // GPS position data complete
   { Position[PosIdx].isReady=1;                                            // mark this record as ready for processing => producing packets for transmission

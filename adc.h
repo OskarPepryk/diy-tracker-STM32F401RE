@@ -1,6 +1,10 @@
 #include <stdint.h>
 
-#include "stm32f10x_adc.h"
+#ifndef WITH_NUCLEO
+	#include "stm32f10x_adc.h"
+#else
+	#include "stm32f4xx_adc.h"
+#endif
 
 void ADC_Configuration(void);
 

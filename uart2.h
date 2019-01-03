@@ -3,7 +3,11 @@
 
 #include <stdint.h>
 
-#include "stm32f10x_usart.h"
+#ifndef WITH_NUCLEO
+	#include "stm32f10x_usart.h"
+#else
+	#include "stm32f4xx_usart.h"
+#endif
 
 #include "uart.h"
 

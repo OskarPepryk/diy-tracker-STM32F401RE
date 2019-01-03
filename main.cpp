@@ -1,7 +1,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "stm32f10x_iwdg.h"
+#ifndef WITH_NUCLEO
+	#include "stm32f10x_iwdg.h"
+#else
+	#include "stm32f4xx_iwdg.h"
+#endif
 
 #include "hal.h"
 
@@ -66,9 +70,13 @@ int main(void)
 {
   IO_Configuration();                          // GPIO for LED and RF chip, SPI for RF, ADC, GPS GPIO and IRQ
 
+#ifndef WITH_NUCLEO
   if(Parameters.ReadFromFlash()<0)             // read parameters from Flash
   { Parameters.setDefault();                   // if nov valid: set defaults
-    Parameters.WriteToFlash(); }               // and write the defaults back to Flash
+  Parameters.WriteToFlash(); }               // and write the defaults back to Flash
+#else
+  Parameters.setDefault(); //Temporary
+#endif
   // to overwrite parameters
   // Parameters.setTxTypeHW();
   // Parameters.setTxPower(+14); // for RFM69HW (H = up to +20dBm Tx power)

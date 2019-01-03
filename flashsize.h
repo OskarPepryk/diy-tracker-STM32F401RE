@@ -4,7 +4,11 @@
 #include <stdint.h>
 
 uint32_t * const   FlashStart = (uint32_t *)0x08000000;                           // where the Flash memory starts
-#define            FlashSize   ((uint16_t *)0x1FFFF7E0)                           // [KB] Flash memory size
+#ifndef WITH_NUCLEO
+	#define            FlashSize   ((uint16_t *)0x1FFFF7E0)                           // [KB] Flash memory size
+#else //STM32F4
+	#define            FlashSize   ((uint16_t *)0x1FFF7A22)                           // [KB] Flash memory size
+#endif
 uint16_t inline getFlashSizeKB(void) { return *FlashSize; }                       // [KB]
 uint16_t inline getFlashPageSizeKB(void) { return 1+(getFlashSizeKB()>=256); }    // [KB]
 uint8_t  inline getFlashPageSizeLog2(void) { return 10+(getFlashSizeKB()>=256); } // [log2([B])]

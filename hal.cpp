@@ -5,15 +5,28 @@
 
 #include "hal.h"
 
-#include "stm32f10x.h"
-#include "stm32f10x_flash.h"
-#include "stm32f10x_gpio.h"
-#include "stm32f10x_rcc.h"
-#include "stm32f10x_pwr.h"
-#include "stm32f10x_tim.h"
-#include "stm32f10x_adc.h"
-#include "stm32f10x_exti.h"
-#include "stm32f10x_iwdg.h"
+#ifndef WITH_NUCLEO
+	#include "stm32f10x.h"
+	#include "stm32f10x_flash.h"
+	#include "stm32f10x_gpio.h"
+	#include "stm32f10x_rcc.h"
+	#include "stm32f10x_pwr.h"
+	#include "stm32f10x_tim.h"
+	#include "stm32f10x_adc.h"
+	#include "stm32f10x_exti.h"
+	#include "stm32f10x_iwdg.h"
+#else
+	#include "stm32f4xx.h"
+	#include "stm32f4xx_flash.h"
+	#include "stm32f4xx_gpio.h"
+	#include "stm32f4xx_rcc.h"
+	#include "stm32f4xx_pwr.h"
+	#include "stm32f4xx_tim.h"
+	#include "stm32f4xx_adc.h"
+	#include "stm32f4xx_exti.h"
+	#include "stm32f4xx_iwdg.h"
+#endif
+
 #include "misc.h"
 
 #include "uart.h"
@@ -169,6 +182,10 @@ void RCC_Configuration(void)
 {
   RCC_DeInit ();                                         // RCC system reset(for debug purpose)
 
+  //STM32F401RE Nucleo doesn't have HSE - Use HSI by default
+  //Don't use ST-Link MCO, it won't be available under battery power
+
+#ifndef WITH_NUCLEO
   uint32_t Timeout=80000;
   RCC_HSEConfig (RCC_HSE_ON);                            // Enable HSE (High Speed External clock = Xtal)
   while (RCC_GetFlagStatus(RCC_FLAG_HSERDY) == RESET)    // Wait till HSE is not ready
@@ -197,6 +214,20 @@ void RCC_Configuration(void)
   while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);   // Wait till PLL is ready
   RCC_SYSCLKConfig (RCC_SYSCLKSource_PLLCLK);            // Select PLL as system clock source
   while (RCC_GetSYSCLKSource() != 0x08);                 // Wait till PLL is used as system clock source
+#else //WITH_NUCLEO
+  RCC_HCLKConfig   (RCC_SYSCLK_Div1);                    // HCLK   = SYSCLK  (for AHB bus)
+  RCC_PCLK2Config  (RCC_HCLK_Div2);                      // PCLK2  = HCLK    (for APB2 periph.  max. 72MHz)
+  RCC_PCLK1Config  (RCC_HCLK_Div2);                      // PCLK1  = HCLK/2  (for APB1 periph.  max. 36MHz)
+  FLASH_SetLatency(FLASH_Latency_2);                     // Flash 2 wait state
+  FLASH_PrefetchBufferCmd(ENABLE);  // Enable Prefetch Buffer
+
+  RCC_PLLConfig(RCC_PLLSource_HSI, 10, 150, 4, 7); // PLLCLK = 4MHz * 15 = 60 MHz
+
+  RCC_PLLCmd (ENABLE);                                   // Enable PLL
+  while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);   // Wait till PLL is ready
+  RCC_SYSCLKConfig (RCC_SYSCLKSource_PLLCLK);            // Select PLL as system clock source
+  while (RCC_GetSYSCLKSource() != 0x08);                 // Wait till PLL is used as system clock source
+#endif
 }
 
 // -------------------------------------------------------------------------------------------------------
@@ -226,6 +257,16 @@ void LED_TX_On    (void) { GPIO_ResetBits(GPIOD, GPIO_Pin_4); }
 void LED_TX_Off   (void) { GPIO_SetBits  (GPIOD, GPIO_Pin_4); }
 #endif
 
+#ifdef WITH_NUCLEO //STM32F4 On-board LED pin is taken by SPI, so we cannot use it
+void LED_PCB_On   (void) { GPIO_SetBits(GPIOC, GPIO_Pin_2); }  // Blue LED is on PC2 and HIGH-active
+void LED_PCB_Off  (void) { GPIO_ResetBits  (GPIOC, GPIO_Pin_2); }
+void LED_RX_On    (void) { GPIO_SetBits(GPIOC, GPIO_Pin_0); }
+void LED_RX_Off   (void) { GPIO_ResetBits  (GPIOC, GPIO_Pin_0); }
+void LED_TX_On    (void) { GPIO_SetBits(GPIOC, GPIO_Pin_1); }
+void LED_TX_Off   (void) { GPIO_ResetBits  (GPIOC, GPIO_Pin_1); }
+#endif
+
+
 static void LED_GPIO_Configuration (void)             // LED on the PCB
 { GPIO_InitTypeDef  GPIO_InitStructure;
 
@@ -250,22 +291,47 @@ static void LED_GPIO_Configuration (void)             // LED on the PCB
   GPIO_Init(GPIOA, &GPIO_InitStructure);
 #endif
 
+#ifdef WITH_NUCLEO
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_0;         // Configure PC0 as output (green LED on the PCB)
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_1;         // Configure PC1 as output (red LED on the PCB)
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_2;         // Configure PC2 as output (blue LED on the PCB)
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+#endif
+
   LED_PCB_Off(); }
 
 // -------------------------------------------------------------------------------------------------------
 
 // function to control and read status of the RF chip
 
-#if defined(WITH_BLUE_PILL) || defined(WITH_MAPLE_MINI) // classical DIY-Tracker
+#if defined(WITH_BLUE_PILL) || defined(WITH_MAPLE_MINI) || defined(WITH_NUCLEO) // classical DIY-Tracker
 
 // PB5: RF chip RESET: active HIGH for RFM69, active low for RFM95
 #ifdef SPEEDUP_STM_LIB
+#ifndef WITH_NUCLEO
 inline void RFM_RESET_High  (void) { GPIOB->BSRR = GPIO_Pin_5; }
 inline void RFM_RESET_Low   (void) { GPIOB->BRR  = GPIO_Pin_5; }
 #else
+inline void RFM_RESET_High  (void) { GPIOB->BSRRL = GPIO_Pin_5; }
+inline void RFM_RESET_Low   (void) { GPIOB->BSRRH  = GPIO_Pin_5; }
+#endif // WITH_NUCLEO
+#else
 inline void RFM_RESET_High  (void) { GPIO_SetBits  (GPIOB, GPIO_Pin_5); }
 inline void RFM_RESET_Low   (void) { GPIO_ResetBits(GPIOB, GPIO_Pin_5); }
-#endif
+#endif // SPEEDUP_STM_LIB
 
 void RFM_Select  (void) { SPI1_Select(); }
 void RFM_Deselect(void) { SPI1_Deselect(); }
@@ -365,6 +431,39 @@ static void RFM_GPIO_Configuration(void)
 
 #endif // WITH_BLUE_PILL || WITH_MAPLE_MINI
 
+#ifdef WITH_NUCLEO
+  GPIO_InitStructure.GPIO_Pin   = /* GPIO_Pin_3 | */ GPIO_Pin_4;      // PB4 = DIO0 and PB3 = DIO4 of RFM69
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IN;
+  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
+  // GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPU;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_5;                         // PB5 = RESET
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+#ifdef WITH_RF_IRQ
+  NVIC_InitTypeDef NVIC_InitStructure;
+  NVIC_InitStructure.NVIC_IRQChannel = EXTI4_IRQn;                  // Enable the external I/O Interrupt
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;         // 0 = highest, 15 = lowest priority
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+
+  SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOB, EXTI_PinSource4);
+  EXTI_InitTypeDef EXTI_InitStructure;
+  EXTI_InitStructure.EXTI_Line = EXTI_Line4;
+  EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+  EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
+  EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+  EXTI_Init(&EXTI_InitStructure);
+
+  NVIC_EnableIRQ(EXTI4_IRQn);
+#endif // WITH_RF_IRQ
+#endif // WITH_NUCLEO
+
 #ifdef WITH_OGN_CUBE_1
   GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_2;                        // PB2 = DIO0 RFM69/95
   GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IN_FLOATING;
@@ -432,6 +531,7 @@ uint8_t RFM_TransferByte(uint8_t Byte) { return SPI1_TransferByte(Byte); }
 
 // -------------------------------------------------------------------------------------------------------
 
+#ifndef WITH_NUCLEO
 SemaphoreHandle_t I2C_Mutex[2];
 
 static I2C_TypeDef *I2C_Bus[2] = { I2C1, I2C2 } ;
@@ -453,6 +553,9 @@ uint8_t I2C_Restart(uint8_t Bus)
   I2C_Restart(I2C_Bus[Bus], I2C_SPEED);
   xSemaphoreGive(I2C_Mutex[Bus]);
   return 0; }
+#else
+	//TODO STM32F4
+#endif
 
 // -------------------------------------------------------------------------------------------------------
 
@@ -488,7 +591,12 @@ uint16_t Measure_MCU_Vref(void)
   // MCU_Vtemp = ((int32_t)1250*MCU_Vtemp+(MCU_Vref>>1))/MCU_Vref;          // [mV]
   // MCU_Temp  = 250 + ((((int32_t)1430-MCU_Vtemp)*37+8)>>4);               // [0.1degC]
   // MCU_Temp = 250 + ( ( ( (int32_t)1430 - ((int32_t)1250*(int32_t)MCU_Vtemp+(MCU_Vref>>1))/MCU_Vref )*(int32_t)37 +8 )>>4); // [0.1degC]
-  MCU_Temp = 250 + ( ( ( (int32_t)14300 - ((int32_t)12500*(int32_t)MCU_Vtemp+(MCU_Vref>>1))/MCU_Vref )*(int32_t)119 + 256 )>>9); // [0.1degC]
+#ifndef WITH_NUCLEO
+MCU_Temp = 250 + ( ( ( (int32_t)14300 - ((int32_t)12500*(int32_t)MCU_Vtemp+(MCU_Vref>>1))/MCU_Vref )*(int32_t)119 + 256 )>>9); // [0.1degC]
+#else
+//TODO
+MCU_Temp = 250 + ( ( ( (int32_t)7600 - ((int32_t)12500*(int32_t)MCU_Vtemp+(MCU_Vref>>1))/MCU_Vref )*(int32_t)119 + 256 )>>11); // [0.1degC]
+#endif
   return MCU_Temp; }             // [0.1degC]
                                  // Datasheet, page 80, 1.43V at 25degC, 4.3mV/degC, 17us sampling time
 
@@ -516,7 +624,11 @@ void GPS_ENABLE (void) { GPIO_SetBits  (GPIOA, GPIO_Pin_0); }
 #endif
 
 #ifdef WITH_GPS_PPS
+#ifndef WITH_NUCLEO
 bool GPS_PPS_isOn(void) { return GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_1) != Bit_RESET; }
+#else
+bool GPS_PPS_isOn(void) { return GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_8) != Bit_RESET; }
+#endif
 #endif
 
 static void GPS_GPIO_Configuration (void)
@@ -530,27 +642,52 @@ static void GPS_GPIO_Configuration (void)
 #endif
 
 #ifdef WITH_GPS_PPS
-  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_1;         // Configure PA.01 as input: PPS from GPS
-  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPD;
-  GPIO_Init(GPIOA, &GPIO_InitStructure);
-#endif
+#ifndef WITH_NUCLEO
+GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_1;         // Configure PA.01 as input: PPS from GPS
+GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPD;
+GPIO_Init(GPIOA, &GPIO_InitStructure);
+#else
+GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_8;         // Configure PA.8 as input: PPS from GPS
+GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IN;
+GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
+GPIO_Init(GPIOA, &GPIO_InitStructure);
+#endif // WITH_NUCLEO
+#endif // WITH_GPS_PPS
 
 #ifdef WITH_PPS_IRQ
-  NVIC_InitTypeDef NVIC_InitStructure;
-  NVIC_InitStructure.NVIC_IRQChannel = EXTI1_IRQn;                  // Enable the external I/O Interrupt
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;         // 0 = highest, 15 = lowest priority
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
+#ifndef WITH_NUCLEO
+NVIC_InitTypeDef NVIC_InitStructure;
+NVIC_InitStructure.NVIC_IRQChannel = EXTI1_IRQn;                  // Enable the external I/O Interrupt
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;         // 0 = highest, 15 = lowest priority
+NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+NVIC_Init(&NVIC_InitStructure);
 
-  GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource1);
-  EXTI_InitTypeDef EXTI_InitStructure;
-  EXTI_InitStructure.EXTI_Line = EXTI_Line1;
-  EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
-  EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
-  EXTI_InitStructure.EXTI_LineCmd = ENABLE;
-  EXTI_Init(&EXTI_InitStructure);
-  NVIC_EnableIRQ(EXTI1_IRQn);
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource1);
+EXTI_InitTypeDef EXTI_InitStructure;
+EXTI_InitStructure.EXTI_Line = EXTI_Line1;
+EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
+EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+EXTI_Init(&EXTI_InitStructure);
+NVIC_EnableIRQ(EXTI1_IRQn);
+#else
+NVIC_InitTypeDef NVIC_InitStructure;
+NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;                  // Enable the external I/O Interrupt
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;         // 0 = highest, 15 = lowest priority
+NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+NVIC_Init(&NVIC_InitStructure);
+
+SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA, EXTI_PinSource8);
+EXTI_InitTypeDef EXTI_InitStructure;
+EXTI_InitStructure.EXTI_Line = EXTI_Line8;
+EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
+EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+EXTI_Init(&EXTI_InitStructure);
+NVIC_EnableIRQ(EXTI9_5_IRQn);
+#endif
 #endif
 
 #ifdef WITH_GPS_ENABLE
@@ -564,19 +701,35 @@ void (*GPS_PPS_IRQ_Callback)(uint32_t TickCount, uint32_t TickTime) = 0;
 
 #ifdef WITH_PPS_IRQ
 #ifdef __cplusplus
-  extern "C"
+extern "C"
 #endif
+#ifndef WITH_NUCLEO
 void EXTI1_IRQHandler(void)                                        // PPS interrupt
 { uint32_t TickTime = getSysTick_Count();                          // [CPU tick] what time before the next RTOS tick the interrupt arrived
-  uint32_t Load     = getSysTick_Reload();                         // [CPU tick] period of the SysTick - 1
-  TickTime          = Load-TickTime;                               // [CPU tick] what time after RTOS tick the PPS arrived
-  TickType_t TickCount = xTaskGetTickCountFromISR();               // [RTOS tick] RTOS tick counter
+uint32_t Load     = getSysTick_Reload();                         // [CPU tick] period of the SysTick - 1
+TickTime          = Load-TickTime;                               // [CPU tick] what time after RTOS tick the PPS arrived
+TickType_t TickCount = xTaskGetTickCountFromISR();               // [RTOS tick] RTOS tick counter
 
-  if(EXTI_GetITStatus(EXTI_Line1) != RESET)
-  { if( GPS_PPS_IRQ_Callback && GPS_PPS_isOn() ) (*GPS_PPS_IRQ_Callback)(TickCount, TickTime); }          // execute the callback
-  EXTI_ClearITPendingBit(EXTI_Line1);
+if(EXTI_GetITStatus(EXTI_Line1) != RESET)
+{ if( GPS_PPS_IRQ_Callback && GPS_PPS_isOn() ) (*GPS_PPS_IRQ_Callback)(TickCount, TickTime); }          // execute the callback
+EXTI_ClearITPendingBit(EXTI_Line1);
 }
-#endif
+#else
+void EXTI9_5_IRQHandler(void)                                        // PPS interrupt
+{ uint32_t TickTime = getSysTick_Count();                          // [CPU tick] what time before the next RTOS tick the interrupt arrived
+uint32_t Load     = getSysTick_Reload();                         // [CPU tick] period of the SysTick - 1
+TickTime          = Load-TickTime;                               // [CPU tick] what time after RTOS tick the PPS arrived
+TickType_t TickCount = xTaskGetTickCountFromISR();               // [RTOS tick] RTOS tick counter
+
+if(EXTI_GetITStatus(EXTI_Line8) != RESET)
+{
+	if( GPS_PPS_IRQ_Callback && GPS_PPS_isOn() )
+		(*GPS_PPS_IRQ_Callback)(TickCount, TickTime);
+}          // execute the callback
+	EXTI_ClearITPendingBit(EXTI_Line8);
+}
+#endif //WITH_NUCLEO
+#endif //WITH_PPS_IRQ
 
 // -------------------------------------------------------------------------------------------------------
 
@@ -623,9 +776,15 @@ void IO_Configuration(void)
 {
   RCC_Configuration();
 
+#ifndef WITH_NUCLEO
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+#else
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
+#endif
   LED_GPIO_Configuration();                              // LED
   GPS_GPIO_Configuration();                              // GPS PPS, Enable, PPS IRQ
 

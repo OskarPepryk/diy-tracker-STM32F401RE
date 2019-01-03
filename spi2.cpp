@@ -1,6 +1,7 @@
 
 #include "spi2.h"
 
+#ifndef WITH_NUCLEO
 void SPI2_Configuration(void)
 { SPI_InitTypeDef SPI_InitStructure;
   GPIO_InitTypeDef GPIO_InitStructure;
@@ -38,6 +39,55 @@ void SPI2_Configuration(void)
   SPI_CalculateCRC(SPI2, DISABLE);
   SPI_Cmd(SPI2, ENABLE);
 }
+#else
+void SPI2_Configuration(void)
+{ SPI_InitTypeDef SPI_InitStructure;
+  GPIO_InitTypeDef GPIO_InitStructure;
+  //STM32F4
+  //RCC_APB2PeriphClockCmd (RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO, ENABLE);
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
+  RCC_APB1PeriphClockCmd (RCC_APB1Periph_SPI2 ,ENABLE);
+
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_12;                 // SS: output
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+  SPI2_Deselect();
+
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_13 | GPIO_Pin_15;    // CLK, MOSI: output
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_14;                // MISO: input
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_UP;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+  //STM32F4 Alternate function mapping
+  //GPIO_PinAFConfig(GPIOB, GPIO_PinSource12, GPIO_AF_SPI2);
+  GPIO_PinAFConfig(GPIOB, GPIO_PinSource13, GPIO_AF_SPI2);
+  GPIO_PinAFConfig(GPIOB, GPIO_PinSource14, GPIO_AF_SPI2);
+  GPIO_PinAFConfig(GPIOB, GPIO_PinSource15, GPIO_AF_SPI2);
+
+  SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
+  SPI_InitStructure.SPI_Mode     = SPI_Mode_Master;
+  SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
+  SPI_InitStructure.SPI_CPOL     = SPI_CPOL_Low;
+  SPI_InitStructure.SPI_CPHA     = SPI_CPHA_1Edge;
+  SPI_InitStructure.SPI_NSS      = SPI_NSS_Soft;
+  SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_4; // 60MHz/4 = 15MHz SPI bitrate (30MHz could possibly work ?)
+  SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
+  SPI_InitStructure.SPI_CRCPolynomial = 7;
+  SPI_Init(SPI2, &SPI_InitStructure);
+  // SPI_RxFIFOThresholdConfig(SPI2, SPI_RxFIFOThreshold_QF);
+  SPI_CalculateCRC(SPI2, DISABLE);
+  SPI_Cmd(SPI2, ENABLE);
+}
+#endif
 
 #ifdef SPEEDUP_STM_LIB
 uint8_t SPI2_TransferByte(uint8_t Byte)

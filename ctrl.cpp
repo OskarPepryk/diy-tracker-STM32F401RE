@@ -7,7 +7,11 @@
 #include <semphr.h>
 #include <queue.h>
 
-#include "stm32f10x_iwdg.h"
+#ifndef WITH_NUCLEO
+	#include "stm32f10x_iwdg.h"
+#else
+	#include "stm32f4xx_iwdg.h"
+#endif
 
 #include <string.h>
 
@@ -151,12 +155,15 @@ static void ReadParameters(void)  // read parameters requested by the user in th
     if( (Len>0) && (BaudRate<=230400) ) Parameters.CONbaud = BaudRate;
 */
     PrintParameters();
-    taskDISABLE_INTERRUPTS();                                              // disable all interrupts: Flash can not be read while being erased
-    // IWDG_ReloadCounter();                                                  // kick the watch-dog
-    Parameters.WriteToFlash();                                             // erase and write the parameters into the last page of Flash
-    if(Parameters.ReadFromFlash()<0) Parameters.setDefault();              // read the parameters back: if invalid, set defaults
-    TimeSync_CorrRef(-20);                                                 // correct the time reference by about the time where he halted the CPU
-    taskENABLE_INTERRUPTS();                                               // bring back interrupts and the system
+
+	#ifndef WITH_NUCLEO //TODO FLASH functions
+		taskDISABLE_INTERRUPTS();                                              // disable all interrupts: Flash can not be read while being erased
+		// IWDG_ReloadCounter();                                                  // kick the watch-dog
+		Parameters.WriteToFlash();                                             // erase and write the parameters into the last page of Flash
+		if(Parameters.ReadFromFlash()<0) Parameters.setDefault();              // read the parameters back: if invalid, set defaults
+		TimeSync_CorrRef(-20);                                                 // correct the time reference by about the time where he halted the CPU
+		taskENABLE_INTERRUPTS();                                               // bring back interrupts and the system
+	#endif
                                                                            // page erase lasts 20ms tus about 20 system ticks are lost here
   }
   PrintParameters();
@@ -431,9 +438,12 @@ void vTaskCTRL(void* pvParameters)
 
 #ifdef WITH_SDLOG
   if(ReadParmFile()>0)
-  { if(Parameters.CompareToFlash()<=0)                         // if new parameters are difference from those in Flash
-    { // Parameters.WriteToFlash();                               // write the new parameters to Flash
-    }
+  {
+	#ifndef WITH_NUCLEO
+	if(Parameters.CompareToFlash()<=0)                         // if new parameters are difference from those in Flash
+	{ // Parameters.WriteToFlash();                               // write the new parameters to Flash
+	}
+	#endif //WITH_NUCLEO
   }
 #endif
   PrintParameters();

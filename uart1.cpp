@@ -2,10 +2,18 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#include "stm32f10x.h"
-#include "stm32f10x_rcc.h"
-#include "stm32f10x_gpio.h"
-#include "stm32f10x_usart.h"
+#ifndef WITH_NUCLEO
+	#include "stm32f10x.h"
+	#include "stm32f10x_rcc.h"
+	#include "stm32f10x_gpio.h"
+	#include "stm32f10x_usart.h"
+#else
+	#include "stm32f4xx.h"
+	#include "stm32f4xx_rcc.h"
+	#include "stm32f4xx_gpio.h"
+	#include "stm32f4xx_usart.h"
+#endif
+
 #include "misc.h"
 
 #include "fifo.h"
@@ -26,9 +34,17 @@ void UART1_Configuration (int BaudRate)
 {
   UART_ConfigNVIC(USART1_IRQn, 0, 0);                   // COnfigure and enable the USART1 Interrupt
 
+#ifndef WITH_NUCLEO
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1 | RCC_APB2Periph_GPIOA, ENABLE);
-
   UART_ConfigGPIO(GPIOA, GPIO_Pin_10, GPIO_Pin_9);      // Configure USART1 Rx (PA10) as input, and USART1 Tx (PA9) as output
+#else
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+
+  UART_ConfigGPIO(GPIOB, GPIO_Pin_7, GPIO_Pin_6);
+  UART_ConfigAF(GPIOB, GPIO_PinSource7, GPIO_PinSource6, GPIO_AF_USART1);
+#endif
+
   UART_ConfigUSART(USART1, BaudRate);
 
   UART1_RxFIFO.Clear(); UART1_TxFIFO.Clear();
